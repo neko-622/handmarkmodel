@@ -76,8 +76,8 @@ int main() {
     int img_height = 1280;  // 输入图像高度
 
     // 模型配置参数
-    array<int, 2> det_shape = {640, 480};  // 检测模型输入尺寸
-    string path_det = "/app_demo/app_assets/models/face_640x480.m1model";  // 人脸检测模型路径
+    array<int, 2> det_shape = {224, 224};  // 检测模型输入尺寸
+    string path_det = "/app_demo/cut_model.onnx";  // 手部检测模型路径
 
     // OSD 信息
     static osdInfo osds[3] = {
@@ -97,20 +97,20 @@ int main() {
 
     // 图像处理器初始化
     array<int, 2> img_shape = {img_width, img_height};  // 原始图像尺寸
-    array<int, 2> crop_shape = {720, 540};  // 裁剪尺寸（保持图像resize后比例不变）
-    const int crop_offset_y = 370;  // 裁剪时Y方向的偏移量
-    // 原图: 720×1280, 模型输入图：640×480
-    // 为了保证模型输入图经过resize后比例不变，需要先将原图裁剪为crop图: 720×540 (上下各裁370px)
+    array<int, 2> crop_shape = {224, 224};  // 裁剪尺寸（适应手部模型输入）
+    const int crop_offset_y = 528;  // 裁剪时Y方向的偏移量
+    // 原图: 720×1280, 模型输入图：224×224
+    // 为了保证模型输入图经过resize后比例合适，需要先将原图裁剪为crop图: 224×224
 
     IMAGEPROCESSOR processor;
     processor.Initialize(&img_shape);  // 初始化图像处理器（配置原图尺寸）
 
-    // 人脸检测模型初始化
+    // 手部检测模型初始化
     SCRFDGRAY detector;
     int box_len = det_shape[0] * det_shape[1] / 512 * 21;  // 计算最大检测框数量
     detector.Initialize(path_det, &crop_shape, &det_shape, false, box_len);  // 初始化检测器
 
-    // 人脸检测结果初始化
+    // 手部检测结果初始化
     FaceDetectionResult* det_result = new FaceDetectionResult;
 
     // OSD可视化器初始化（用于绘制检测框）
@@ -141,11 +141,11 @@ int main() {
         // 从sensor获取图像（裁剪图）
         processor.GetImage(&img_sensor);
 
-        // 人脸检测模型推理（置信度阈值0.4）
+        // 手部检测模型推理（置信度阈值0.4）
         detector.Predict(&img_sensor, det_result, 0.4f);
 
         /**********************************************************************************
-         * 3.1 判断是否有检测到人脸
+         * 3.1 判断是否有检测到手部
          **********************************************************************************/
         if (det_result->boxes.size() > 0) {
             /**********************************************************************************
@@ -172,13 +172,13 @@ int main() {
             }
 
             /**********************************************************************************
-             * 3.3 OSD绘图：使用原图坐标在OSD上绘制人脸检测框
+             * 3.3 OSD绘图：使用原图坐标在OSD上绘制手部检测框
              **********************************************************************************/
             visualizer.Draw(boxes_original_coord);
         }
         else {
-            // 未检测到人脸，清除OSD上的检测框
-            cout << "[INFO] No face detected" << endl;
+            // 未检测到手部，清除OSD上的检测框
+            cout << "[INFO] No hand detected" << endl;
             std::vector<std::array<float, 4>> empty_boxes;
             visualizer.Draw(empty_boxes);  // 传入空向量清除显示
         }

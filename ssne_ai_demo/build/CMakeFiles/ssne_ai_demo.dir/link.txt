@@ -1,0 +1,1 @@
+/usr/bin/c++  -std=c++11 -O2 -rdynamic CMakeFiles/ssne_ai_demo.dir/demo_face.cpp.o "CMakeFiles/ssne_ai_demo.dir/src/osd-device.cpp.o" CMakeFiles/ssne_ai_demo.dir/src/pipeline_image.cpp.o CMakeFiles/ssne_ai_demo.dir/src/scrfd_gray.cpp.o CMakeFiles/ssne_ai_demo.dir/src/utils.cpp.o -o ssne_ai_demo  -lssne -lcmabuffer -losd -lsszlog -lzlog -lemb 

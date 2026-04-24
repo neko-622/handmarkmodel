@@ -301,7 +301,8 @@ void SCRFDGRAY::Postprocess(std::vector<std::array<float, 4>>* boxes,
     std::vector<float>* scores, FaceDetectionResult* result, 
     float* conf_threshold) {
     // 对推理结果进行解码：将相对坐标转换为绝对坐标
-    DecodeBoxes(*boxes);
+    // 注意：手部模型的输出可能已经是绝对坐标，需要根据实际情况调整
+    // DecodeBoxes(*boxes);
 
     // 过滤低分结果：只保留置信度超过阈值的检测框
     size_t num_res = boxes->size();
@@ -423,73 +424,39 @@ void SCRFDGRAY::Predict(ssne_tensor_t* img, FaceDetectionResult* result, float c
         fprintf(stderr, "ssne inference fail!\n");
     }
 
-    // 获取模型输出：6个输出tensor（3个分数输出 + 3个检测框输出）
-    ssne_getoutput(model_id, 6, outputs);
+    // 获取模型输出：1个输出tensor（手部检测和关键点）
+    ssne_getoutput(model_id, 1, outputs);
     
     // 数据类型转换：从tensor中提取数据并转换为标准格式
     std::vector<std::array<float, 4>> bboxes;
     std::vector<float> scores;
     std::array<float, 4> tmp_bbox;
 
-    // 获取三个不同尺度层的输出数据
-    float *out_scores0 = (float*)get_data(outputs[0]);  // 第一层分数输出
-    float *out_scores1 = (float*)get_data(outputs[1]);  // 第二层分数输出
-    float *out_scores2 = (float*)get_data(outputs[2]);  // 第三层分数输出
-    float *out_bboxes0 = (float*)get_data(outputs[3]);  // 第一层检测框输出
-    float *out_bboxes1 = (float*)get_data(outputs[4]);  // 第二层检测框输出
-    float *out_bboxes2 = (float*)get_data(outputs[5]);  // 第三层检测框输出
+    // 获取输出数据
+    float *output_data = (float*)get_data(outputs[0]);  // 手部检测和关键点输出
     
-    // 处理第一层输出（最细粒度，检测框数量最多）
-    // printf("Det --- processing layer 1 output!\n");
-    int idx_s = 0;  // 分数索引
-    int idx_b = 0;  // 检测框索引
-    int num_bbox = det_shape[0] * det_shape[1] / 1024;  // 每层的检测框数量
-    for (int i = 0; i < num_bbox * 16; i++) {
-        for (int j = 0; j < 2; j++) {
-            scores.push_back(out_scores0[idx_s]);
-            idx_s += 1;
-            
-            // 提取检测框坐标 [x1, y1, x2, y2]
-            for (int k = 0; k < 4; k++) {
-                tmp_bbox[k] = out_bboxes0[idx_b+k];                
-            }
-            idx_b+=4;
-            bboxes.push_back(tmp_bbox);            
-        }
-    }
-
-    // 处理第二层输出（中等粒度）
-    // printf("Det --- processing layer 2 output!\n");
-    idx_s = 0;
-    idx_b = 0;
-    for (int i = 0; i < num_bbox * 4; i++) {
-        for (int j = 0; j < 2; j++) {
-            scores.push_back(out_scores1[idx_s]);
-            idx_s += 1;
-            
-            for (int k = 0; k < 4; k++) {
-                tmp_bbox[k] = out_bboxes1[idx_b+k];                
-            }
-            idx_b+=4;
-            bboxes.push_back(tmp_bbox);            
-        }
-    }
-
-    // 处理第三层输出（最粗粒度，检测框数量最少）
-    // printf("Det --- processing layer 3 output!\n");
-    idx_s = 0;
-    idx_b = 0;    
+    // 假设输出格式为 [1, 1152, 7, 7]，我们需要从中提取手部检测框和置信度
+    // 这里简化处理，假设前4个值是检测框坐标，第5个值是置信度
+    // 实际处理需要根据模型的具体输出格式进行调整
+    int output_size = 1 * 1152 * 7 * 7;
+    int num_bbox = 10;  // 假设最多检测10个手部
+    
     for (int i = 0; i < num_bbox; i++) {
-        for (int j = 0; j < 2; j++) {
-            scores.push_back(out_scores2[idx_s]);
-            idx_s += 1;
-            
-            for (int k = 0; k < 4; k++) {
-                tmp_bbox[k] = out_bboxes2[idx_b+k];                
-            }
-            idx_b+=4;
-            bboxes.push_back(tmp_bbox);            
-        }
+        // 假设每个手部检测结果占用5个值：x1, y1, x2, y2, score
+        int offset = i * 5;
+        if (offset + 4 >= output_size) break;
+        
+        // 提取检测框坐标 [x1, y1, x2, y2]
+        tmp_bbox[0] = output_data[offset];
+        tmp_bbox[1] = output_data[offset + 1];
+        tmp_bbox[2] = output_data[offset + 2];
+        tmp_bbox[3] = output_data[offset + 3];
+        
+        // 提取置信度分数
+        float score = output_data[offset + 4];
+        
+        bboxes.push_back(tmp_bbox);
+        scores.push_back(score);
     }
 
     
