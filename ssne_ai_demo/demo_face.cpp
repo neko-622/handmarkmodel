@@ -63,7 +63,54 @@ bool check_exit_flag() {
 }
 
 /**
- * @brief 人脸检测演示程序主函数
+ * @brief 绘制手部关键点
+ * @param visualizer 可视化器实例
+ * @param keypoints 手部关键点坐标
+ * @param crop_offset_y 裁剪偏移量
+ */
+void draw_hand_keypoints(VISUALIZER& visualizer, const std::vector<std::array<float, 2>>& keypoints, int crop_offset_y) {
+    // 定义关键点连接顺序（根据手部骨骼结构）
+    const std::vector<std::pair<int, int>> connections = {
+        {0, 1}, {1, 2}, {2, 3}, {3, 4},  // 拇指
+        {0, 5}, {5, 6}, {6, 7}, {7, 8},  // 食指
+        {0, 9}, {9, 10}, {10, 11}, {11, 12},  // 中指
+        {0, 13}, {13, 14}, {14, 15}, {15, 16},  // 无名指
+        {0, 17}, {17, 18}, {18, 19}, {19, 20}   // 小指
+    };
+
+    // 绘制连接线
+    for (const auto& conn : connections) {
+        int idx1 = conn.first;
+        int idx2 = conn.second;
+        if (idx1 < keypoints.size() && idx2 < keypoints.size()) {
+            // 转换到原图坐标
+            float x1 = keypoints[idx1][0];
+            float y1 = keypoints[idx1][1] + crop_offset_y;
+            float x2 = keypoints[idx2][0];
+            float y2 = keypoints[idx2][1] + crop_offset_y;
+
+            // 绘制线段（使用小矩形模拟线段）
+            float width = 2.0f;
+            std::array<float, 4> line_box = {std::min(x1, x2) - width, std::min(y1, y2) - width, 
+                                           std::max(x1, x2) + width, std::max(y1, y2) + width};
+            std::vector<std::array<float, 4>> line_boxes = {line_box};
+            visualizer.Draw(line_boxes);
+        }
+    }
+
+    // 绘制关键点（使用小正方形）
+    for (const auto& keypoint : keypoints) {
+        float x = keypoint[0];
+        float y = keypoint[1] + crop_offset_y;
+        float size = 3.0f;
+        std::array<float, 4> point_box = {x - size, y - size, x + size, y + size};
+        std::vector<std::array<float, 4>> point_boxes = {point_box};
+        visualizer.Draw(point_boxes);
+    }
+}
+
+/**
+ * @brief 手部检测演示程序主函数
  * @return 执行结果，0表示成功
  */
 int main() {
@@ -152,10 +199,11 @@ int main() {
              * 3.2 坐标转换：将crop图坐标转换为原图坐标
              **********************************************************************************/
             std::vector<std::array<float, 4>> boxes_original_coord;  // 存储转换后的原图坐标
+            std::vector<std::array<float, 2>> keypoints;  // 存储手部关键点坐标
 
             // 遍历所有检测框进行坐标转换
             for (size_t i = 0; i < det_result->boxes.size(); i++) {
-                // 原始crop图坐标（基于720×540裁剪图）
+                // 原始crop图坐标（基于224×224裁剪图）
                 float x1_crop = det_result->boxes[i][0];  // 左上角x
                 float y1_crop = det_result->boxes[i][1];  // 左上角y
                 float x2_crop = det_result->boxes[i][2];  // 右下角x
@@ -163,7 +211,7 @@ int main() {
 
                 // 转换到原图坐标（y坐标加上裁剪偏移，x坐标不变）
                 float x1_orig = x1_crop;
-                float y1_orig = y1_crop + crop_offset_y;  // 加上裁剪偏移量370
+                float y1_orig = y1_crop + crop_offset_y;  // 加上裁剪偏移量528
                 float x2_orig = x2_crop;
                 float y2_orig = y2_crop + crop_offset_y;
 
@@ -171,10 +219,24 @@ int main() {
                 boxes_original_coord.push_back({x1_orig, y1_orig, x2_orig, y2_orig});
             }
 
+            // 提取手部关键点（假设模型输出包含21个关键点）
+            // 这里需要根据实际模型输出格式进行调整
+            // 假设关键点存储在det_result->landmarks中
+            if (det_result->landmarks.size() >= 21) {
+                for (int i = 0; i < 21; i++) {
+                    if (i < det_result->landmarks.size()) {
+                        float x = det_result->landmarks[i][0];
+                        float y = det_result->landmarks[i][1];
+                        keypoints.push_back({x, y});
+                    }
+                }
+            }
+
             /**********************************************************************************
-             * 3.3 OSD绘图：使用原图坐标在OSD上绘制手部检测框
+             * 3.3 OSD绘图：使用原图坐标在OSD上绘制手部检测框和关键点
              **********************************************************************************/
             visualizer.Draw(boxes_original_coord);
+            draw_hand_keypoints(visualizer, keypoints, crop_offset_y);
         }
         else {
             // 未检测到手部，清除OSD上的检测框
